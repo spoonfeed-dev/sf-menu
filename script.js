@@ -16,35 +16,211 @@ class CustomerMenu {
         this.categoriesRef = collection(db, `restaurants/${this.restaurantId}/categories`);
         this.ordersRef = collection(db, `restaurants/${this.restaurantId}/orders`);
         this.serviceRef = collection(db, `restaurants/${this.restaurantId}/service_requests`);
-        
-        // Session management - NO LOCALSTORAGE
-        this.sessionId = this.generateSessionId();
-        this.sessionStartTime = new Date();
-        this.sessionActive = true;
-        this.sessionOrders = []; // Reset on each page load
-        
+
+        // Session management - NOW WITH LOCALSTORAGE
+        this.sessionId = this.getOrCreateSessionId();
+        this.sessionStartTime = this.getOrCreateSessionStartTime();
+        this.sessionActive = this.getSessionActive();
+        this.sessionOrders = this.loadSessionOrders();
+
         // Table and menu data
-        this.tableNumber = null;
+        this.tableNumber = this.loadTableNumber();
         this.menuItems = {};
         this.customCategories = [];
         this.defaultCategories = ['starters', 'mains', 'desserts', 'beverages'];
-        
-        // Cart and UI state - FRESH ON EACH VISIT
-        this.cart = []; // Always starts empty
+
+        // Cart and UI state - NOW WITH LOCALSTORAGE PERSISTENCE
+        this.cart = this.loadCart();
         this.currentCategory = 'all';
         this.searchTerm = '';
-        
         this.init();
     }
 
-    init() {
-        this.hideLoadingScreen();
-        this.detectTableNumber();
-        this.setupEventListeners?.();
-        this.setupSessionTimer();
-        this.loadCustomCategories?.();
-        this.loadMenuItems?.();
+    // Add this inside your CustomerMenu class
+saveSessionToStorage() {
+    localStorage.setItem('customer_session_id', this.sessionId);
+    localStorage.setItem('customer_session_start', this.sessionStartTime.toISOString());
+    localStorage.setItem('customer_session_active', this.sessionActive.toString());
+    localStorage.setItem('customer_session_orders', JSON.stringify(this.sessionOrders));
+    if (this.tableNumber) {
+        localStorage.setItem('customer_table_number', this.tableNumber);
     }
+    localStorage.setItem('customer_cart', JSON.stringify(this.cart));
+    console.log('💾 Session saved to localStorage');
+}
+
+    // Add this inside your CustomerMenu class
+// Add this inside your CustomerMenu class
+loadTableNumber() {
+    const stored = localStorage.getItem('customer_table_number');
+    if (stored) {
+        console.log('📱 Restored table number:', stored);
+        return stored;
+    }
+    return null;
+}
+    // Add this method to handle bill requests
+async askForBill() {
+    // Check if there are any orders placed in this session
+    if (this.sessionOrders.length === 0) {
+        alert('No orders placed in this session. Add some items first!');
+        return;
+    }
+
+    // Confirm if user wants to end session and get bill
+    if (confirm('Are you ready to end your dining session and receive your bill?')) {
+        await this.endSession();
+    }
+}
+async placeOrder() {
+    if (this.cart.length === 0) {
+        alert('Your cart is empty!');
+        return;
+    }
+
+    if (!this.tableNumber) {
+        alert('Please select your table number first!');
+        return;
+    }
+
+    const orderButton = document.getElementById('place-order-btn');
+    const originalText = orderButton.textContent;
+    orderButton.textContent = 'Sending to Kitchen...';
+    orderButton.disabled = true;
+
+    try {
+        const order = {
+            sessionId: this.sessionId,
+            tableNumber: this.tableNumber,
+            items: [...this.cart],
+            status: 'pending',
+            timestamp: new Date(),
+            total: this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0),
+            orderNumber: this.sessionOrders.length + 1,
+            restaurantId: this.restaurantId
+        };
+
+        console.log('📝 Placing order:', order);
+        const docRef = await addDoc(this.ordersRef, order);
+        console.log('✅ Order placed successfully');
+
+        // Add to IN-MEMORY session orders only
+        this.sessionOrders.push({ ...order, id: docRef.id });
+
+        // Clear cart - fresh for next order
+        this.cart = [];
+        this.saveCart();
+        this.updateCartDisplay();
+
+        // UPDATE BUTTON VISIBILITY - This is the key line!
+        this.updateSessionButtons();
+
+        this.closeCart?.();
+        this.showOrderConfirmation?.(order);
+    } catch (error) {
+        console.error('❌ Error placing order:', error);
+        alert('Failed to place order. Please try again.');
+    } finally {
+        orderButton.textContent = originalText;
+        orderButton.disabled = false;
+    }
+    this.saveSessionToStorage();
+}
+
+
+
+    init() {
+    this.hideLoadingScreen();
+    this.detectTableNumber();
+    this.setupEventListeners();
+    this.setupSessionTimer();
+    this.loadCustomCategories();
+    this.loadMenuItems();
+    
+    // Initialize button visibility
+    this.updateSessionButtons();
+
+    setTimeout(() => {
+    this.checkSessionRestoration();
+    // Update display with restored data
+    this.updateCartDisplay();
+    this.updateSessionStats?.();
+}, 1000);
+}
+
+checkSessionRestoration() {
+    const hasStoredSession = localStorage.getItem('customer_session_id');
+    if (hasStoredSession && this.sessionOrders.length > 0) {
+        console.log('📱 Session restored with', this.sessionOrders.length, 'previous orders');
+        this.displayRestorationMessage();
+    }
+}
+
+displayRestorationMessage() {
+    // Show a brief toast that session was restored
+    const toast = document.createElement('div');
+    toast.className = 'session-restored-toast';
+    toast.innerHTML = `
+        <div class="toast-content">
+            <span class="material-symbols-outlined">refresh</span>
+            <span>Session restored • ${this.sessionOrders.length} orders found</span>
+        </div>
+    `;
+    toast.style.cssText = `
+        position: fixed;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: var(--success);
+        color: white;
+        padding: 12px 24px;
+        border-radius: 50px;
+        font-size: 14px;
+        font-weight: 600;
+        z-index: 2000;
+        animation: slideDown 0.3s ease-out;
+    `;
+    
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.remove();
+    }, 3000);
+}
+
+
+    // Add this method to your CustomerMenu class
+// Updated method to control button visibility properly
+updateSessionButtons() {
+    const viewCartBtn = document.getElementById('view-cart-btn');
+    const askBillBtn = document.getElementById('ask-bill-btn');
+    
+    // "View Cart" button is ALWAYS visible (this is the key change)
+    if (viewCartBtn) {
+        viewCartBtn.style.display = 'inline-block';
+    }
+    
+    // "Ask for Bill" button only visible if customer has placed at least one order
+    if (askBillBtn) {
+        if (this.sessionOrders.length > 0) {
+            askBillBtn.style.display = 'inline-block';
+        } else {
+            askBillBtn.style.display = 'none';
+        }
+    }
+    
+    console.log(`🔄 Button visibility updated - View Cart: always visible, Ask for Bill: ${this.sessionOrders.length > 0 ? 'visible' : 'hidden'}`);
+}
+
+
+
+    setupSmoothScrolling() {
+    // Add smooth scroll behavior to the main container
+    const menuContainer = document.querySelector('.menu-container');
+    if (menuContainer) {
+        menuContainer.style.scrollBehavior = 'smooth';
+    }
+}
 
     hideLoadingScreen() {
         const loadingScreen = document.getElementById('loading-screen');
@@ -61,6 +237,37 @@ class CustomerMenu {
         const random = Math.random().toString(36).substr(2, 9);
         return `session_${timestamp}_${random}`;
     }
+
+    // Session ID management
+getOrCreateSessionId() {
+    const stored = localStorage.getItem('customer_session_id');
+    if (stored) {
+        console.log('📱 Restored session ID:', stored);
+        return stored;
+    }
+    const newId = this.generateSessionId();
+    localStorage.setItem('customer_session_id', newId);
+    console.log('📱 Created new session ID:', newId);
+    return newId;
+}
+
+getOrCreateSessionStartTime() {
+    const stored = localStorage.getItem('customer_session_start');
+    if (stored) {
+        const startTime = new Date(stored);
+        console.log('📱 Restored session start time:', startTime);
+        return startTime;
+    }
+    const newStartTime = new Date();
+    localStorage.setItem('customer_session_start', newStartTime.toISOString());
+    console.log('📱 Created new session start time:', newStartTime);
+    return newStartTime;
+}
+
+getSessionActive() {
+    const stored = localStorage.getItem('customer_session_active');
+    return stored ? stored === 'true' : true;
+}
 
     setupSessionTimer() {
         setInterval(() => {
@@ -121,6 +328,7 @@ class CustomerMenu {
     selectTable(tableNumber) {
         this.tableNumber = tableNumber;
         this.displayTableInfo(tableNumber);
+        this.saveSessionToStorage();
         
         const overlay = document.getElementById('table-selector-overlay');
         overlay.classList.remove('active');
@@ -163,47 +371,149 @@ class CustomerMenu {
             });
         }
         
+        this.saveCart(); // Save to localStorage
         this.updateCartDisplay();
         this.displayMenuItems?.();
         console.log('✅ Added to cart:', item.name);
     }
 
     updateCartItem(itemId, newQuantity) {
-        if (newQuantity <= 0) {
-            this.cart = this.cart.filter(item => item.id !== itemId);
-        } else {
-            const cartItem = this.cart.find(item => item.id === itemId);
-            if (cartItem) {
-                cartItem.quantity = newQuantity;
-            }
+    if (newQuantity <= 0) {
+        this.cart = this.cart.filter(item => item.id !== itemId);
+    } else {
+        const cartItem = this.cart.find(item => item.id === itemId);
+        if (cartItem) {
+            cartItem.quantity = newQuantity;
         }
-        
-        this.updateCartDisplay();
-        this.displayMenuItems?.();
     }
+    
+    this.saveCart();
+    this.updateCartDisplay();
+    this.updateCartSummary();
+    this.displayMenuItems?.();
+    this.saveSessionToStorage();
+
+    // Re-render cart modal for dynamic update
+    this.viewCart();
+}
+updateCartSummary() {
+    // Update cart subtotal and total in the cart modal
+    const subtotal = this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    
+    // Update subtotal display
+    const subtotalElement = document.querySelector('.cart-summary .summary-row span:last-child');
+    if (subtotalElement) {
+        subtotalElement.textContent = `₹${subtotal}`;
+    }
+    
+    // Update total display
+    const totalElement = document.querySelector('.total-row span:last-child');
+    if (totalElement) {
+        totalElement.textContent = `₹${subtotal}`;
+    }
+    
+    // Update cart items count
+    const itemCount = this.cart.reduce((sum, item) => sum + item.quantity, 0);
+    const cartItemsHeader = document.querySelector('.cart-header h3');
+    if (cartItemsHeader) {
+        cartItemsHeader.textContent = `Cart Items (${itemCount})`;
+    }
+}
+
+    // NEW: Scroll to top of menu
+scrollToTop() {
+    const menuContent = document.querySelector('.menu-content');
+    if (menuContent) {
+        menuContent.scrollIntoView({
+            behavior: 'smooth',
+            block: 'start'
+        });
+    }
+}
+
+// NEW: Scroll to specific category section
+scrollToCategory(category) {
+    // Ensure menu is rendered before scrolling
+    setTimeout(() => {
+        const categorySection = document.getElementById(`category-${category}`);
+        if (categorySection) {
+            // Calculate offset for sticky headers
+            const headerHeight = document.querySelector('.menu-header')?.offsetHeight || 0;
+            const categoryNavHeight = document.querySelector('.category-nav')?.offsetHeight || 0;
+            const offset = headerHeight + categoryNavHeight + 20; // 20px extra padding
+
+            const elementPosition = categorySection.getBoundingClientRect().top + window.pageYOffset;
+            const offsetPosition = elementPosition - offset;
+
+            window.scrollTo({
+                top: offsetPosition,
+                behavior: 'smooth'
+            });
+        }
+    }, 100);
+}
+// NEW: Render category section with ID for scrolling
+renderCategorySection(category, items) {
+    const categoryName = category.charAt(0).toUpperCase() + category.slice(1);
+    
+    let sectionHTML = `
+        <div class="menu-section" id="category-${category}">
+            <div class="section-header">
+                <h2 class="section-title">${categoryName}</h2>
+                <span class="section-count">${items.length} items</span>
+            </div>
+            <div class="items-list">
+    `;
+
+    items.forEach(item => {
+        sectionHTML += this.renderMenuItem(item);
+    });
+
+    sectionHTML += `
+            </div>
+        </div>
+    `;
+
+    return sectionHTML;
+}
+
 
     updateCartDisplay() {
-        const cartCount = document.getElementById('cart-count');
-        const cartTotal = document.getElementById('cart-total');
-        const cartFloat = document.getElementById('cart-float');
-        const continueBtn = document.getElementById('continue-btn');
-        
-        const totalItems = this.cart.reduce((sum, item) => sum + item.quantity, 0);
-        const totalAmount = this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-        
-        if (cartCount) cartCount.textContent = totalItems;
-        if (cartTotal) cartTotal.textContent = totalAmount;
-        
-        if (cartFloat) {
-            cartFloat.style.display = totalItems > 0 ? 'block' : 'none';
-        }
-        
-        if (continueBtn) {
-            continueBtn.style.display = totalItems > 0 ? 'inline-block' : 'none';
-        }
-        
-        this.updateSessionStats?.();
+    const cartCount = document.getElementById('cart-count');
+    const cartTotal = document.getElementById('cart-total');
+    const cartFloat = document.getElementById('cart-float');
+    const continueBtn = document.getElementById('continue-btn');
+    const placeOrderBtn = document.getElementById('place-order-btn'); // Add this line
+    
+    const totalItems = this.cart.reduce((sum, item) => sum + item.quantity, 0);
+    const totalAmount = this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+
+    if (cartCount) cartCount.textContent = totalItems;
+    if (cartTotal) cartTotal.textContent = totalAmount;
+    
+    if (cartFloat) {
+        cartFloat.style.display = totalItems > 0 ? 'block' : 'none';
     }
+    
+    if (continueBtn) {
+        continueBtn.style.display = totalItems > 0 ? 'inline-block' : 'none';
+    }
+
+    // ADD THIS BLOCK - Disable place order button when cart is empty
+    if (placeOrderBtn) {
+        placeOrderBtn.disabled = totalItems === 0;
+        if (totalItems === 0) {
+            placeOrderBtn.style.opacity = '0.5';
+            placeOrderBtn.style.cursor = 'not-allowed';
+        } else {
+            placeOrderBtn.style.opacity = '1';
+            placeOrderBtn.style.cursor = 'pointer';
+        }
+    }
+
+    this.updateSessionStats?.();
+}
+
 
     updateSessionStats() {
         const sessionItemsEl = document.getElementById('session-items');
@@ -231,21 +541,22 @@ class CustomerMenu {
 
     // Order Placement - CLEAN SESSION TRACKING
     async placeOrder() {
+        // ADD THIS CHECK - Extra safety to prevent order placement with empty cart
         if (this.cart.length === 0) {
-            alert('Your cart is empty!');
+            console.log('Cannot place order: Cart is empty');
             return;
         }
-        
+
         if (!this.tableNumber) {
             alert('Please select your table number first!');
             return;
         }
-        
+
         const orderButton = document.getElementById('place-order-btn');
         const originalText = orderButton.textContent;
         orderButton.textContent = 'Sending to Kitchen...';
         orderButton.disabled = true;
-        
+
         try {
             const order = {
                 sessionId: this.sessionId,
@@ -257,21 +568,25 @@ class CustomerMenu {
                 orderNumber: this.sessionOrders.length + 1,
                 restaurantId: this.restaurantId
             };
-            
+
             console.log('📝 Placing order:', order);
             const docRef = await addDoc(this.ordersRef, order);
             console.log('✅ Order placed successfully');
-            
+
             // Add to IN-MEMORY session orders only
             this.sessionOrders.push({ ...order, id: docRef.id });
-            
+
             // Clear cart - fresh for next order
             this.cart = [];
+            this.saveCart();
             this.updateCartDisplay();
-            
+
+            // Update button visibility after first order
+            this.updateSessionButtons();
+
             this.closeCart?.();
             this.showOrderConfirmation?.(order);
-            
+
         } catch (error) {
             console.error('❌ Error placing order:', error);
             alert('Failed to place order. Please try again.');
@@ -300,7 +615,18 @@ class CustomerMenu {
 
     async endSession() {
         this.sessionActive = false;
-        this.generateBill?.();
+        this.clearSessionData();
+        
+        // Generate and display the bill
+        this.generateBill();
+        
+        // Optional: Clear all session data (if you want to prevent going back)
+        setTimeout(() => {
+            // Clear session storage if you're using any
+            sessionStorage.clear();
+            localStorage.clear();
+            console.log('🧹 Session ended and storage cleared');
+        }, 1000);
     }
 
     // Bill Generation - CLEAN SESSION DATA
@@ -328,6 +654,13 @@ class CustomerMenu {
     }
 
     startNewSession() {
+        // Clear localStorage before reload
+        localStorage.removeItem('customer_session_id');
+        localStorage.removeItem('session_start_time');
+        localStorage.removeItem('session_cart');
+        localStorage.removeItem('session_orders');
+        this.clearSessionData();
+        console.log('🧹 Cleared session data for new session');
         // Simple page reload for fresh session
         window.location.reload();
     }
@@ -453,51 +786,76 @@ class CustomerMenu {
         categoryScroll.innerHTML = categoriesHTML;
     }
 
+    // UPDATED: Filter by Category with Smooth Scrolling
     filterByCategory(category) {
         this.currentCategory = category;
         this.searchTerm = '';
-        
+
         // Clear search input
         const searchInput = document.getElementById('menu-search');
         if (searchInput) {
             searchInput.value = '';
         }
-        
-        this.displayMenuItems();
+
+        // Update category buttons
+        this.displayCategories();
+
+        if (category === 'all') {
+            // For "All Items", scroll to the top of menu content
+            this.scrollToTop();
+        } else {
+            // For specific categories, scroll to that category section
+            this.scrollToCategory(category);
+        }
+
         console.log('📂 Filtered by category:', category);
     }
 
-    // Recommendations Display
-    displayRecommendations(recommendedItems) {
-        const banner = document.getElementById('recommendations-banner');
-        const container = document.getElementById('recommended-items');
-        
-        if (!container || recommendedItems.length === 0) {
-            if (banner) banner.style.display = 'none';
-            return;
+    scrollToTop() {
+        const menuContainer = document.querySelector('.menu-container');
+        if (menuContainer) {
+            menuContainer.scrollTo({
+                top: 0,
+                behavior: 'smooth'
+            });
         }
-        
-        let recommendedHTML = '';
-        recommendedItems.slice(0, 6).forEach(item => {
-            recommendedHTML += `
-                <div class="recommended-item" onclick="customerMenu.showItemDetails('${item.id}')">
-                    <div class="recommended-image">
-                        ${item.imageUrl ? 
-                            `<img src="${item.imageUrl}" alt="${item.name}">` :
-                            `<div class="no-image-placeholder">🍽️</div>`
-                        }
-                    </div>
-                    <div class="recommended-info">
-                        <div class="recommended-name">${item.name}</div>
-                        <div class="recommended-price">₹${item.price}</div>
-                    </div>
-                </div>
-            `;
-        });
-        
-        container.innerHTML = recommendedHTML;
-        banner.style.display = 'block';
     }
+
+    scrollToCategory(category) {
+        // Ensure menu is rendered before scrolling
+        setTimeout(() => {
+            const categorySection = document.getElementById(`category-${category}`);
+            if (categorySection) {
+                // Calculate offset for sticky headers
+                const headerHeight = document.querySelector('.menu-header')?.offsetHeight || 0;
+                const categoryNavHeight = document.querySelector('.category-nav')?.offsetHeight || 0;
+                const offset = headerHeight + categoryNavHeight + 20; // 20px extra padding
+
+                const elementPosition = categorySection.getBoundingClientRect().top + window.pageYOffset;
+                const offsetPosition = elementPosition - offset;
+
+                window.scrollTo({
+                    top: offsetPosition,
+                    behavior: 'smooth'
+                });
+            }
+        }, 100);
+    }
+
+    // Recommendations Display
+    // UPDATED: Remove banner display - recommendations will show in regular list with badges
+displayRecommendations(recommendedItems) {
+    // Hide the banner completely
+    const banner = document.getElementById('recommendations-banner');
+    if (banner) {
+        banner.style.display = 'none';
+    }
+    
+    // No need to create separate recommendation display
+    // They will be shown in regular menu list with badges
+    console.log('📌 Recommended items will show with badges in regular menu');
+}
+
 
     // Menu Items Display
     displayMenuItems() {
@@ -591,7 +949,7 @@ class CustomerMenu {
         
         // UPDATED to use <ul> and a different class
         let sectionHTML = `
-            <div class="menu-section">
+            <div class="menu-section" id="category-${category}">
                 <div class="section-header">
                     <h2 class="section-title">${categoryName}</h2>
                     <span class="section-count">${items.length} items</span>
@@ -610,16 +968,42 @@ class CustomerMenu {
     createMenuItemCard(item) {
         const cartItem = this.cart.find(cartItem => cartItem.id === item.id);
         const quantity = cartItem ? cartItem.quantity : 0;
-        
-        // UPDATED HTML structure for a list item
+
+        // UPDATED: Add badge for recommended items
+        let badgeHTML = '';
+        if (item.isRecommended || item.isBestseller || item.isNew) {
+            let badgeText = '';
+            let badgeClass = '';
+            
+            if (item.isRecommended) {
+                badgeText = "Chef's Pick";
+                badgeClass = 'recommended';
+            } else if (item.isBestseller) {
+                badgeText = 'Bestseller';
+                badgeClass = 'bestseller';
+            } else if (item.isNew) {
+                badgeText = 'New';
+                badgeClass = 'new';
+            }
+            
+            badgeHTML = `<div class="item-badge ${badgeClass}">${badgeText}</div>`;
+        }
+
+        // Update the image container to include badge
+        const imageHTML = item.imageUrl 
+            ? `<div class="item-image-container-list">
+                    <img src="${item.imageUrl}" alt="${item.name}" class="item-image-list" loading="lazy">
+                    ${badgeHTML}
+               </div>`
+            : `<div class="item-image-container-list">
+                    <div class="no-image-list">🍽️</div>
+                    ${badgeHTML}
+               </div>`;
+
+        // Use imageHTML in the returned HTML
         return `
             <li class="menu-item-list-entry" onclick="customerMenu.showItemDetails('${item.id}')">
-                <div class="item-image-container-list">
-                    ${item.imageUrl ? 
-                        `<img src="${item.imageUrl}" alt="${item.name}" class="item-image-list">` :
-                        '<div class="no-image-list">🍽️</div>'
-                    }
-                </div>
+                ${imageHTML}
                 <div class="item-content-list">
                     <div class="item-header-list">
                         <h3 class="item-name-list">${item.name}</h3>
@@ -780,20 +1164,25 @@ shopping_cart_checkout
             this.cart.forEach(item => {
                 // UPDATED cart item HTML for consistency
                 cartHTML += `
-                    <div class="cart-item">
+                    <div class="cart-item" data-item-id="${item.id}">
                         <div class="cart-item-image">
                             ${item.imageUrl ? 
-                                `<img src="${item.imageUrl}" alt="${item.name}">` :
-                                `<div class="no-image-placeholder">🍽️</div>`
+                                `<img src="${item.imageUrl}" alt="${item.name}">` : 
+                                `<div class="no-image">🍽️</div>`
                             }
                         </div>
                         <div class="cart-item-details">
                             <div class="cart-item-name">${item.name}</div>
-                            <div class="cart-item-actions">
-                                ${this.getQuantityControls(item.id, item.quantity)}
+                            <div class="cart-item-price">₹${item.price} each</div>
+                        </div>
+                        <div class="cart-item-actions">
+                            <div class="quantity-controls">
+                                <button class="quantity-btn" onclick="customerMenu.decreaseCartItem('${item.id}')">-</button>
+                                <span class="quantity-display">${item.quantity}</span>
+                                <button class="quantity-btn" onclick="customerMenu.increaseCartItem('${item.id}')">+</button>
                             </div>
                         </div>
-                        <div class="cart-item-price">₹${item.price * item.quantity}</div>
+                        <div class="cart-item-total">₹${item.price * item.quantity}</div>
                     </div>
                 `;
             });
@@ -824,21 +1213,22 @@ shopping_cart_checkout
 
     // Order Placement
     async placeOrder() {
+        // ADD THIS CHECK - Extra safety to prevent order placement with empty cart
         if (this.cart.length === 0) {
-            alert('Your cart is empty!');
+            console.log('Cannot place order: Cart is empty');
             return;
         }
-        
+
         if (!this.tableNumber) {
             alert('Please select your table number first!');
             return;
         }
-        
+
         const orderButton = document.getElementById('place-order-btn');
         const originalText = orderButton.textContent;
         orderButton.textContent = 'Sending to Kitchen...';
         orderButton.disabled = true;
-        
+
         try {
             const order = {
                 sessionId: this.sessionId,
@@ -850,21 +1240,25 @@ shopping_cart_checkout
                 orderNumber: this.sessionOrders.length + 1,
                 restaurantId: this.restaurantId
             };
-            
+
             console.log('📝 Placing order:', order);
             const docRef = await addDoc(this.ordersRef, order);
             console.log('✅ Order placed successfully');
-            
+
             // Add to IN-MEMORY session orders only
             this.sessionOrders.push({ ...order, id: docRef.id });
-            
+
             // Clear cart - fresh for next order
             this.cart = [];
+            this.saveCart();
             this.updateCartDisplay();
-            
+
+            // Update button visibility after first order
+            this.updateSessionButtons();
+
             this.closeCart?.();
             this.showOrderConfirmation?.(order);
-            
+
         } catch (error) {
             console.error('❌ Error placing order:', error);
             alert('Failed to place order. Please try again.');
@@ -915,36 +1309,36 @@ shopping_cart_checkout
     }
 
     // Item Details Modal
-    showItemDetails(itemId) {
-        const allItems = Object.values(this.menuItems).flat();
-        const item = allItems.find(i => i.id === itemId);
+    // showItemDetails(itemId) {
+    //     const allItems = Object.values(this.menuItems).flat();
+    //     const item = allItems.find(i => i.id === itemId);
         
-        if (!item) return;
+    //     if (!item) return;
         
-        const modal = document.getElementById('item-modal');
-        const modalBody = document.getElementById('item-modal-body');
+    //     const modal = document.getElementById('item-modal');
+    //     const modalBody = document.getElementById('item-modal-body');
         
-        if (!modalBody) return;
+    //     if (!modalBody) return;
         
-        const badges = this.getItemBadges(item);
-        const cartItem = this.cart.find(cartItem => cartItem.id === item.id);
-        const quantity = cartItem ? cartItem.quantity : 0;
+    //     const badges = this.getItemBadges(item);
+    //     const cartItem = this.cart.find(cartItem => cartItem.id === item.id);
+    //     const quantity = cartItem ? cartItem.quantity : 0;
         
-        modalBody.innerHTML = `
-            <div class="item-modal-image-container">
-                <img src="${item.imageUrl}" alt="${item.name}">
-            </div>
-            <div class="item-modal-details">
-                <h2>${item.name}</h2>
-                <p>${item.description}</p>
-                <div class="item-modal-price">₹${item.price}</div>
-                <!-- Add more details as needed -->
-            </div>
-        `;
+    //     modalBody.innerHTML = `
+    //         <div class="item-modal-image-container">
+    //             <img src="${item.imageUrl}" alt="${item.name}">
+    //         </div>
+    //         <div class="item-modal-details">
+    //             <h2>${item.name}</h2>
+    //             <p>${item.description}</p>
+    //             <div class="item-modal-price">₹${item.price}</div>
+    //             <!-- Add more details as needed -->
+    //         </div>
+    //     `;
         
-        modal.classList.add('active');
-        document.body.style.overflow = 'hidden';
-    }
+    //     modal.classList.add('active');
+    //     document.body.style.overflow = 'hidden';
+    // }
 
     updateItemModal(itemId) {
         const cartItem = this.cart.find(item => item.id === itemId);
@@ -960,13 +1354,13 @@ shopping_cart_checkout
         }
     }
 
-    closeItemModal() {
-        const modal = document.getElementById('item-modal');
-        if (modal) {
-            modal.classList.remove('active');
-            document.body.style.overflow = '';
-        }
-    }
+    // closeItemModal() {
+    //     const modal = document.getElementById('item-modal');
+    //     if (modal) {
+    //         modal.classList.remove('active');
+    //         document.body.style.overflow = '';
+    //     }
+    // }
 
     // Service Requests
     async requestService(type) {
@@ -1029,7 +1423,17 @@ shopping_cart_checkout
 
     async endSession() {
         this.sessionActive = false;
+        
+        // Generate and display the bill
         this.generateBill();
+        
+        // Optional: Clear all session data (if you want to prevent going back)
+        setTimeout(() => {
+            // Clear session storage if you're using any
+            sessionStorage.clear();
+            localStorage.clear();
+            console.log('🧹 Session ended and storage cleared');
+        }, 1000);
     }
 
     generateBill() {
@@ -1119,16 +1523,16 @@ shopping_cart_checkout
                     
                     <div class="bill-actions">
                         <button class="btn-share-bill" onclick="customerMenu.shareBill()">
-                            📱 Share Bill
+                            Share Bill Details
                         </button>
                         <button class="btn-new-session" onclick="customerMenu.startNewSession()">
-                            🍽️ New Session
+                            Dine Again
                         </button>
                     </div>
                     
                     <div class="bill-footer">
-                        <p>Powered by Premium QR Menu System</p>
-                        <p>Visit again soon! 😊</p>
+                        <center><p>Powered by SpoonFeed WebKitchens</p>
+                        <p>Revolutionising Dining Experiences</p></center>
                     </div>
                 </div>
             </div>
@@ -1236,42 +1640,125 @@ Thank you for dining with us! 🙏
     }
 
     startNewSession() {
+        // Clear localStorage before reload
+        localStorage.removeItem('customer_session_id');
+        localStorage.removeItem('session_start_time');
+        localStorage.removeItem('session_cart');
+        localStorage.removeItem('session_orders');
+        
         // Simple page reload for fresh session
         window.location.reload();
     }
 
+    // Session orders persistence
+loadSessionOrders() {
+    const stored = localStorage.getItem('customer_session_orders');
+    if (stored) {
+        try {
+            const orders = JSON.parse(stored);
+            console.log('📱 Restored session orders:', orders.length);
+            return orders;
+        } catch (e) {
+            console.error('❌ Error parsing session orders:', e);
+        }
+    }
+    return [];
+}
+
+saveSessionOrders() {
+    localStorage.setItem('customer_session_orders', JSON.stringify(this.sessionOrders));
+}
+
+// Cart persistence
+loadCart() {
+    const stored = localStorage.getItem('session_cart');
+    if (stored) {
+        try {
+            const cart = JSON.parse(stored);
+            console.log('📱 Restored cart:', cart.length, 'items');
+            return cart;
+        } catch (e) {
+            console.error('❌ Error parsing cart:', e);
+        }
+    }
+    return [];
+}
+
+saveCart() {
+    localStorage.setItem('session_cart', JSON.stringify(this.cart));
+}
+
+// Add these new methods to your CustomerMenu class
+
+increaseCartItem(itemId) {
+    const cartItem = this.cart.find(item => item.id === itemId);
+    if (cartItem) {
+        const newQuantity = cartItem.quantity + 1;
+        this.updateCartItem(itemId, newQuantity);
+    }
+}
+
+decreaseCartItem(itemId) {
+    const cartItem = this.cart.find(item => item.id === itemId);
+    if (cartItem) {
+        const newQuantity = cartItem.quantity - 1;
+        this.updateCartItem(itemId, newQuantity);
+    }
+}
+
     // Event Listeners
     setupEventListeners() {
-        // Close modals when clicking outside
-        document.addEventListener('click', (e) => {
-            if (e.target.classList.contains('modal-overlay')) {
-                const modals = document.querySelectorAll('.modal-overlay.active');
-                modals.forEach(modal => {
-                    modal.classList.remove('active');
-                });
-                document.body.style.overflow = '';
-            }
-        });
+    // View Cart button - always available
+    const viewCartBtn = document.getElementById('view-cart-btn');
+    if (viewCartBtn) {
+        viewCartBtn.addEventListener('click', () => this.viewCart());
+    }
 
-        // Hide search suggestions when clicking outside
-        document.addEventListener('click', (e) => {
-            if (!e.target.closest('.search-container')) {
-                this.hideSearchSuggestions();
-            }
-        });
+    // Ask for Bill button - only available after first order
+    const askBillBtn = document.getElementById('ask-bill-btn');
+    if (askBillBtn) {
+        askBillBtn.addEventListener('click', () => this.askForBill());
+    }
 
-        // ESC key to close modals
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
-                const modals = document.querySelectorAll('.modal-overlay.active');
-                modals.forEach(modal => {
-                    modal.classList.remove('active');
-                });
-                document.body.style.overflow = '';
-                this.hideSearchSuggestions();
-            }
+    // Service request buttons
+    document.addEventListener('click', (e) => {
+        if (e.target.classList.contains('service-btn')) {
+            const serviceType = e.target.textContent.trim();
+            this.requestService(serviceType);
+        }
+    });
+
+    // Menu search
+    const searchInput = document.getElementById('menu-search');
+    if (searchInput) {
+        searchInput.addEventListener('input', (e) => {
+            this.searchTerm = e.target.value;
+            this.displayMenuItems();
         });
     }
+
+    // Cart float button
+    const cartFloat = document.getElementById('cart-float');
+    if (cartFloat) {
+        cartFloat.addEventListener('click', () => this.viewCart());
+    }
+
+    // Modal close buttons
+    document.addEventListener('click', (e) => {
+        if (e.target.classList.contains('close-btn') || e.target.closest('.close-btn')) {
+            this.closeModals();
+        }
+    });
+
+    // Table selector
+    document.addEventListener('click', (e) => {
+        if (e.target.classList.contains('table-btn')) {
+            const tableNumber = e.target.textContent.trim();
+            this.selectTable(tableNumber);
+        }
+    });
+}
+
 }
 
 // Initialize the customer menu

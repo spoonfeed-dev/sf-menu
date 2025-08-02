@@ -58,6 +58,7 @@
             <div class="session-info">
                 <div class="restaurant-branding">
                     <h1 class="restaurant-name" id="restaurant-name">Eleven's Cafe</h1>
+                    <p>Good Food - Good Mood</p>
                     <div class="session-status">Active Dining Session</div>
                 </div>
                 <div class="table-info">
@@ -71,7 +72,7 @@
             <!-- Premium Search Bar -->
             <div class="search-container">
                 <input type="text" id="menu-search" placeholder="Search dishes, ingredients..." 
-                       onkeyup="customerMenu.searchMenu(event)" autocomplete="off">
+                       onkeyup="customerMenu.searchMenu(event)" autocomplete="on">
                 <div class="search-suggestions" id="search-suggestions"></div>
                 <div class="search-filters" id="search-filters" style="display: none;">
                     <button class="filter-btn" onclick="customerMenu.filterBy('vegetarian')">Veg</button>
@@ -106,10 +107,10 @@ crown
                     </div>
                 </div>
                 <div class="recommended-items" id="recommended-items"></div>
-                <div class="banner-cta">
+                <!-- <div class="banner-cta">
                     <span class="material-symbols-outlined">local_fire_department</span>
                     <span>Try something new today!</span>
-                </div>
+                </div> -->
             </section>
 
             <!-- Menu Items Section -->
@@ -144,25 +145,25 @@ shopping_cart
     </div>
 
     <!-- Session Controls Footer -->
-    <div class="session-controls" id="session-controls">
-        <div class="session-summary">
-            <div class="session-stats">
-                <div class="session-items" id="session-items">0 items ordered</div>
-                <div class="session-total" id="session-total">Session Total: ₹0</div>
-            </div>
-            <div class="session-progress">
-                <div class="progress-bar" id="session-progress"></div>
-            </div>
-        </div>
-        <div class="session-actions">
-            <button class="btn-continue" onclick="customerMenu.viewCart()" style="display: none;" id="continue-btn">
-                View Cart
-            </button>
-            <button class="btn-end-session" onclick="customerMenu.confirmEndSession()" id="end-session-btn">
-                Ask for Bill
-            </button>
-        </div>
+    <!-- Replace the existing session controls section -->
+<div class="session-controls">
+    <div class="session-summary">
+        <div id="session-items" class="session-items">0 items ordered</div>
+        <div id="session-total" class="session-total"></div>
     </div>
+    <div class="session-actions">
+        <!-- View Cart - Always visible -->
+        <button id="view-cart-btn" class="btn-view-cart">
+            View Cart
+        </button>
+        <!-- Ask for Bill - Only visible after first order -->
+        <button id="ask-bill-btn" class="btn-end-session" style="display: none;">
+            Ask for Bill
+        </button>
+    </div>
+</div>
+
+
 
     <!-- Cart Modal -->
     <div id="cart-modal" class="modal-overlay">
@@ -206,7 +207,7 @@ shopping_cart
             
             <div class="modal-actions">
                 <button class="btn-secondary" onclick="customerMenu.closeCart()">
-                    Back to Menu
+                    Back to menu
                 </button>
                 <button class="btn-primary" onclick="customerMenu.placeOrder()" id="place-order-btn">
                     Send to Kitchen
@@ -299,6 +300,38 @@ shopping_cart
             <span class="toast-message" id="error-message">Something went wrong</span>
         </div>
     </div>
+    <!-- Cart Modal -->
+<div class="modal-overlay" id="cart-modal-overlay">
+    <div class="modal-container cart-modal-container">
+        <div class="modal-header">
+            <h2>🛒 Your Order</h2>
+            <button class="close-btn" onclick="customerMenu.closeCart()">×</button>
+        </div>
+        <div class="modal-body cart-modal-body">
+            <div id="cart-items-container" class="cart-items">
+                <!-- Cart items will be populated here -->
+            </div>
+            <div id="cart-summary" class="cart-summary">
+                <!-- Cart summary will be populated here -->
+            </div>
+        </div>
+        <div class="modal-actions">
+            <button class="btn-secondary" onclick="customerMenu.closeCart()">Continue Shopping</button>
+            <button class="btn-primary" id="place-order-btn" onclick="customerMenu.placeOrder()">Place Order</button>
+        </div>
+    </div>
+</div>
+<!-- Enhanced Cart Float -->
+<!-- <div class="cart-float" id="cart-float" style="display: none;">
+    <button class="cart-btn" onclick="customerMenu.showCart()">
+        <span class="cart-icon">🛒</span>
+        <div class="cart-info">
+            <span class="cart-count" id="cart-count">0 </span>
+            <span class="cart-total">₹<span id="cart-total">0</span></span>
+        </div>
+    </button>
+</div> -->
+
 
     <!-- JavaScript -->
     <script type="module" src="script.js"></script>
