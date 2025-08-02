@@ -1468,11 +1468,11 @@ shopping_cart_checkout
         const billHTML = `
             <div class="bill-container premium-fade-in">
                 <div class="bill-header">
-                    <div class="bill-restaurant-name">🍽️ Premium Restaurant</div>
+                    <div class="bill-restaurant-name">SahuJi's - Dosa Ca</div>
                     <div class="bill-details">
                         Excellence in Every Bite<br>
-                        Korba, Chhattisgarh, India<br>
-                        Phone: +91 98765 43210<br>
+                        Subhash Nagar, Korba, Chhattisgarh 495677<br>
+                        Phone: +91 7089999180<br>
                         GSTIN: 22XXXXX1234X1ZX
                     </div>
                 </div>
