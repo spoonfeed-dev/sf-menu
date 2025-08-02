@@ -1530,9 +1530,9 @@ shopping_cart_checkout
                         </button>
                     </div>
                     
-                    <div class="bill-footer">
-                        <center><p>Powered by SpoonFeed WebKitchens</p>
-                        <p>Revolutionising Dining Experiences</p></center>
+                    <div class="bill-footer" style="margin-top:2rem;">
+                        <center><p><small>Powered by SpoonFeed WebKitchens</small></p>
+                        <p><small>Revolutionising Dining Experiences</small></p></center>
                     </div>
                 </div>
             </div>
