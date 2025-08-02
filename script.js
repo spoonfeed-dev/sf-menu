@@ -17,20 +17,20 @@ class CustomerMenu {
         this.ordersRef = collection(db, `restaurants/${this.restaurantId}/orders`);
         this.serviceRef = collection(db, `restaurants/${this.restaurantId}/service_requests`);
         
-        // Session management with localStorage persistence
-        this.sessionId = this.getOrCreateSessionId();
-        this.sessionStartTime = this.getSessionStartTime();
+        // Session management - NO LOCALSTORAGE
+        this.sessionId = this.generateSessionId();
+        this.sessionStartTime = new Date();
         this.sessionActive = true;
-        this.sessionOrders = this.loadSessionOrders(); // Load from localStorage
-
+        this.sessionOrders = []; // Reset on each page load
+        
         // Table and menu data
         this.tableNumber = null;
         this.menuItems = {};
         this.customCategories = [];
         this.defaultCategories = ['starters', 'mains', 'desserts', 'beverages'];
         
-        // Cart persistence
-        this.cart = this.loadCart(); // Load cart from localStorage
+        // Cart and UI state - FRESH ON EACH VISIT
+        this.cart = []; // Always starts empty
         this.currentCategory = 'all';
         this.searchTerm = '';
         
@@ -38,42 +38,13 @@ class CustomerMenu {
     }
 
     init() {
-    this.hideLoadingScreen();
-    this.detectTableNumber();
-    this.setupEventListeners?.();
-    this.setupSmoothScrolling();
-    this.setupSessionTimer();
-    this.loadCustomCategories?.();
-    this.loadMenuItems?.();
-    
-    // ADD THIS LINE - Initialize button visibility
-    this.updateSessionButtons();
-}
-
-    // Add this method to your CustomerMenu class
-updateSessionButtons() {
-    const viewCartBtn = document.getElementById('view-cart-btn');
-    const askBillBtn = document.getElementById('ask-bill-btn');
-    
-    // Show "Ask for Bill" only if customer has placed at least one order
-    // Show "View Cart" when no orders have been placed yet
-    if (this.sessionOrders.length > 0) {
-        if (viewCartBtn) viewCartBtn.style.display = 'none';
-        if (askBillBtn) askBillBtn.style.display = 'inline-block';
-    } else {
-        if (viewCartBtn) viewCartBtn.style.display = 'inline-block';
-        if (askBillBtn) askBillBtn.style.display = 'none';
+        this.hideLoadingScreen();
+        this.detectTableNumber();
+        this.setupEventListeners?.();
+        this.setupSessionTimer();
+        this.loadCustomCategories?.();
+        this.loadMenuItems?.();
     }
-}
-
-
-    setupSmoothScrolling() {
-    // Add smooth scroll behavior to the main container
-    const menuContainer = document.querySelector('.menu-container');
-    if (menuContainer) {
-        menuContainer.style.scrollBehavior = 'smooth';
-    }
-}
 
     hideLoadingScreen() {
         const loadingScreen = document.getElementById('loading-screen');
@@ -89,24 +60,6 @@ updateSessionButtons() {
         const timestamp = Date.now();
         const random = Math.random().toString(36).substr(2, 9);
         return `session_${timestamp}_${random}`;
-    }
-
-    getOrCreateSessionId() {
-        let sessionId = localStorage.getItem('customer_session_id');
-        if (!sessionId) {
-            sessionId = this.generateSessionId();
-            localStorage.setItem('customer_session_id', sessionId);
-        }
-        return sessionId;
-    }
-
-    getSessionStartTime() {
-        let startTime = localStorage.getItem('session_start_time');
-        if (!startTime) {
-            startTime = new Date().toISOString();
-            localStorage.setItem('session_start_time', startTime);
-        }
-        return new Date(startTime);
     }
 
     setupSessionTimer() {
@@ -210,148 +163,47 @@ updateSessionButtons() {
             });
         }
         
-        this.saveCart(); // Save to localStorage
         this.updateCartDisplay();
         this.displayMenuItems?.();
         console.log('✅ Added to cart:', item.name);
     }
 
     updateCartItem(itemId, newQuantity) {
-    if (newQuantity <= 0) {
-        this.cart = this.cart.filter(item => item.id !== itemId);
-    } else {
-        const cartItem = this.cart.find(item => item.id === itemId);
-        if (cartItem) {
-            cartItem.quantity = newQuantity;
+        if (newQuantity <= 0) {
+            this.cart = this.cart.filter(item => item.id !== itemId);
+        } else {
+            const cartItem = this.cart.find(item => item.id === itemId);
+            if (cartItem) {
+                cartItem.quantity = newQuantity;
+            }
         }
+        
+        this.updateCartDisplay();
+        this.displayMenuItems?.();
     }
-    
-    this.saveCart();
-    this.updateCartDisplay();
-    this.updateCartSummary();
-    this.displayMenuItems?.();
-
-    // Re-render cart modal for dynamic update
-    this.viewCart();
-}
-updateCartSummary() {
-    // Update cart subtotal and total in the cart modal
-    const subtotal = this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-    
-    // Update subtotal display
-    const subtotalElement = document.querySelector('.cart-summary .summary-row span:last-child');
-    if (subtotalElement) {
-        subtotalElement.textContent = `₹${subtotal}`;
-    }
-    
-    // Update total display
-    const totalElement = document.querySelector('.total-row span:last-child');
-    if (totalElement) {
-        totalElement.textContent = `₹${subtotal}`;
-    }
-    
-    // Update cart items count
-    const itemCount = this.cart.reduce((sum, item) => sum + item.quantity, 0);
-    const cartItemsHeader = document.querySelector('.cart-header h3');
-    if (cartItemsHeader) {
-        cartItemsHeader.textContent = `Cart Items (${itemCount})`;
-    }
-}
-
-    // NEW: Scroll to top of menu
-scrollToTop() {
-    const menuContent = document.querySelector('.menu-content');
-    if (menuContent) {
-        menuContent.scrollIntoView({
-            behavior: 'smooth',
-            block: 'start'
-        });
-    }
-}
-
-// NEW: Scroll to specific category section
-scrollToCategory(category) {
-    // Ensure menu is rendered before scrolling
-    setTimeout(() => {
-        const categorySection = document.getElementById(`category-${category}`);
-        if (categorySection) {
-            // Calculate offset for sticky headers
-            const headerHeight = document.querySelector('.menu-header')?.offsetHeight || 0;
-            const categoryNavHeight = document.querySelector('.category-nav')?.offsetHeight || 0;
-            const offset = headerHeight + categoryNavHeight + 20; // 20px extra padding
-
-            const elementPosition = categorySection.getBoundingClientRect().top + window.pageYOffset;
-            const offsetPosition = elementPosition - offset;
-
-            window.scrollTo({
-                top: offsetPosition,
-                behavior: 'smooth'
-            });
-        }
-    }, 100);
-}
-// NEW: Render category section with ID for scrolling
-renderCategorySection(category, items) {
-    const categoryName = category.charAt(0).toUpperCase() + category.slice(1);
-    
-    let sectionHTML = `
-        <div class="menu-section" id="category-${category}">
-            <div class="section-header">
-                <h2 class="section-title">${categoryName}</h2>
-                <span class="section-count">${items.length} items</span>
-            </div>
-            <div class="items-list">
-    `;
-
-    items.forEach(item => {
-        sectionHTML += this.renderMenuItem(item);
-    });
-
-    sectionHTML += `
-            </div>
-        </div>
-    `;
-
-    return sectionHTML;
-}
-
 
     updateCartDisplay() {
-    const cartCount = document.getElementById('cart-count');
-    const cartTotal = document.getElementById('cart-total');
-    const cartFloat = document.getElementById('cart-float');
-    const continueBtn = document.getElementById('continue-btn');
-    const placeOrderBtn = document.getElementById('place-order-btn'); // Add this line
-    
-    const totalItems = this.cart.reduce((sum, item) => sum + item.quantity, 0);
-    const totalAmount = this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-
-    if (cartCount) cartCount.textContent = totalItems;
-    if (cartTotal) cartTotal.textContent = totalAmount;
-    
-    if (cartFloat) {
-        cartFloat.style.display = totalItems > 0 ? 'block' : 'none';
-    }
-    
-    if (continueBtn) {
-        continueBtn.style.display = totalItems > 0 ? 'inline-block' : 'none';
-    }
-
-    // ADD THIS BLOCK - Disable place order button when cart is empty
-    if (placeOrderBtn) {
-        placeOrderBtn.disabled = totalItems === 0;
-        if (totalItems === 0) {
-            placeOrderBtn.style.opacity = '0.5';
-            placeOrderBtn.style.cursor = 'not-allowed';
-        } else {
-            placeOrderBtn.style.opacity = '1';
-            placeOrderBtn.style.cursor = 'pointer';
+        const cartCount = document.getElementById('cart-count');
+        const cartTotal = document.getElementById('cart-total');
+        const cartFloat = document.getElementById('cart-float');
+        const continueBtn = document.getElementById('continue-btn');
+        
+        const totalItems = this.cart.reduce((sum, item) => sum + item.quantity, 0);
+        const totalAmount = this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+        
+        if (cartCount) cartCount.textContent = totalItems;
+        if (cartTotal) cartTotal.textContent = totalAmount;
+        
+        if (cartFloat) {
+            cartFloat.style.display = totalItems > 0 ? 'block' : 'none';
         }
+        
+        if (continueBtn) {
+            continueBtn.style.display = totalItems > 0 ? 'inline-block' : 'none';
+        }
+        
+        this.updateSessionStats?.();
     }
-
-    this.updateSessionStats?.();
-}
-
 
     updateSessionStats() {
         const sessionItemsEl = document.getElementById('session-items');
@@ -379,22 +231,21 @@ renderCategorySection(category, items) {
 
     // Order Placement - CLEAN SESSION TRACKING
     async placeOrder() {
-        // ADD THIS CHECK - Extra safety to prevent order placement with empty cart
         if (this.cart.length === 0) {
-            console.log('Cannot place order: Cart is empty');
+            alert('Your cart is empty!');
             return;
         }
-
+        
         if (!this.tableNumber) {
             alert('Please select your table number first!');
             return;
         }
-
+        
         const orderButton = document.getElementById('place-order-btn');
         const originalText = orderButton.textContent;
         orderButton.textContent = 'Sending to Kitchen...';
         orderButton.disabled = true;
-
+        
         try {
             const order = {
                 sessionId: this.sessionId,
@@ -406,26 +257,21 @@ renderCategorySection(category, items) {
                 orderNumber: this.sessionOrders.length + 1,
                 restaurantId: this.restaurantId
             };
-
+            
             console.log('📝 Placing order:', order);
             const docRef = await addDoc(this.ordersRef, order);
             console.log('✅ Order placed successfully');
-
-            // Add to session orders and save to localStorage
+            
+            // Add to IN-MEMORY session orders only
             this.sessionOrders.push({ ...order, id: docRef.id });
-            this.saveSessionOrders();
-
-            // Clear cart and save
+            
+            // Clear cart - fresh for next order
             this.cart = [];
-            this.saveCart();
             this.updateCartDisplay();
-
-            // Update button visibility after first order
-            this.updateSessionButtons();
-
+            
             this.closeCart?.();
             this.showOrderConfirmation?.(order);
-
+            
         } catch (error) {
             console.error('❌ Error placing order:', error);
             alert('Failed to place order. Please try again.');
@@ -454,13 +300,6 @@ renderCategorySection(category, items) {
 
     async endSession() {
         this.sessionActive = false;
-        
-        // Clear all session data from localStorage
-        localStorage.removeItem('customer_session_id');
-        localStorage.removeItem('session_start_time');
-        localStorage.removeItem('session_cart');
-        localStorage.removeItem('session_orders');
-        
         this.generateBill?.();
     }
 
@@ -489,12 +328,6 @@ renderCategorySection(category, items) {
     }
 
     startNewSession() {
-        // Clear localStorage before reload
-        localStorage.removeItem('customer_session_id');
-        localStorage.removeItem('session_start_time');
-        localStorage.removeItem('session_cart');
-        localStorage.removeItem('session_orders');
-        
         // Simple page reload for fresh session
         window.location.reload();
     }
@@ -620,60 +453,18 @@ renderCategorySection(category, items) {
         categoryScroll.innerHTML = categoriesHTML;
     }
 
-    // UPDATED: Filter by Category with Smooth Scrolling
     filterByCategory(category) {
         this.currentCategory = category;
         this.searchTerm = '';
-
+        
         // Clear search input
         const searchInput = document.getElementById('menu-search');
         if (searchInput) {
             searchInput.value = '';
         }
-
-        // Update category buttons
-        this.displayCategories();
-
-        if (category === 'all') {
-            // For "All Items", scroll to the top of menu content
-            this.scrollToTop();
-        } else {
-            // For specific categories, scroll to that category section
-            this.scrollToCategory(category);
-        }
-
+        
+        this.displayMenuItems();
         console.log('📂 Filtered by category:', category);
-    }
-
-    scrollToTop() {
-        const menuContainer = document.querySelector('.menu-container');
-        if (menuContainer) {
-            menuContainer.scrollTo({
-                top: 0,
-                behavior: 'smooth'
-            });
-        }
-    }
-
-    scrollToCategory(category) {
-        // Ensure menu is rendered before scrolling
-        setTimeout(() => {
-            const categorySection = document.getElementById(`category-${category}`);
-            if (categorySection) {
-                // Calculate offset for sticky headers
-                const headerHeight = document.querySelector('.menu-header')?.offsetHeight || 0;
-                const categoryNavHeight = document.querySelector('.category-nav')?.offsetHeight || 0;
-                const offset = headerHeight + categoryNavHeight + 20; // 20px extra padding
-
-                const elementPosition = categorySection.getBoundingClientRect().top + window.pageYOffset;
-                const offsetPosition = elementPosition - offset;
-
-                window.scrollTo({
-                    top: offsetPosition,
-                    behavior: 'smooth'
-                });
-            }
-        }, 100);
     }
 
     // Recommendations Display
@@ -800,7 +591,7 @@ renderCategorySection(category, items) {
         
         // UPDATED to use <ul> and a different class
         let sectionHTML = `
-            <div class="menu-section" id="category-${category}">
+            <div class="menu-section">
                 <div class="section-header">
                     <h2 class="section-title">${categoryName}</h2>
                     <span class="section-count">${items.length} items</span>
@@ -820,7 +611,7 @@ renderCategorySection(category, items) {
         const cartItem = this.cart.find(cartItem => cartItem.id === item.id);
         const quantity = cartItem ? cartItem.quantity : 0;
         
-        // UPDATED HTML structure for a list 
+        // UPDATED HTML structure for a list item
         return `
             <li class="menu-item-list-entry" onclick="customerMenu.showItemDetails('${item.id}')">
                 <div class="item-image-container-list">
@@ -989,25 +780,20 @@ shopping_cart_checkout
             this.cart.forEach(item => {
                 // UPDATED cart item HTML for consistency
                 cartHTML += `
-                    <div class="cart-item" data-item-id="${item.id}">
+                    <div class="cart-item">
                         <div class="cart-item-image">
                             ${item.imageUrl ? 
-                                `<img src="${item.imageUrl}" alt="${item.name}">` : 
-                                `<div class="no-image">🍽️</div>`
+                                `<img src="${item.imageUrl}" alt="${item.name}">` :
+                                `<div class="no-image-placeholder">🍽️</div>`
                             }
                         </div>
                         <div class="cart-item-details">
                             <div class="cart-item-name">${item.name}</div>
-                            <div class="cart-item-price">₹${item.price} each</div>
-                        </div>
-                        <div class="cart-item-actions">
-                            <div class="quantity-controls">
-                                <button class="quantity-btn" onclick="customerMenu.decreaseCartItem('${item.id}')">-</button>
-                                <span class="quantity-display">${item.quantity}</span>
-                                <button class="quantity-btn" onclick="customerMenu.increaseCartItem('${item.id}')">+</button>
+                            <div class="cart-item-actions">
+                                ${this.getQuantityControls(item.id, item.quantity)}
                             </div>
                         </div>
-                        <div class="cart-item-total">₹${item.price * item.quantity}</div>
+                        <div class="cart-item-price">₹${item.price * item.quantity}</div>
                     </div>
                 `;
             });
@@ -1038,22 +824,21 @@ shopping_cart_checkout
 
     // Order Placement
     async placeOrder() {
-        // ADD THIS CHECK - Extra safety to prevent order placement with empty cart
         if (this.cart.length === 0) {
-            console.log('Cannot place order: Cart is empty');
+            alert('Your cart is empty!');
             return;
         }
-
+        
         if (!this.tableNumber) {
             alert('Please select your table number first!');
             return;
         }
-
+        
         const orderButton = document.getElementById('place-order-btn');
         const originalText = orderButton.textContent;
         orderButton.textContent = 'Sending to Kitchen...';
         orderButton.disabled = true;
-
+        
         try {
             const order = {
                 sessionId: this.sessionId,
@@ -1065,26 +850,21 @@ shopping_cart_checkout
                 orderNumber: this.sessionOrders.length + 1,
                 restaurantId: this.restaurantId
             };
-
+            
             console.log('📝 Placing order:', order);
             const docRef = await addDoc(this.ordersRef, order);
             console.log('✅ Order placed successfully');
-
-            // Add to session orders and save to localStorage
+            
+            // Add to IN-MEMORY session orders only
             this.sessionOrders.push({ ...order, id: docRef.id });
-            this.saveSessionOrders();
-
-            // Clear cart and save
+            
+            // Clear cart - fresh for next order
             this.cart = [];
-            this.saveCart();
             this.updateCartDisplay();
-
-            // Update button visibility after first order
-            this.updateSessionButtons();
-
+            
             this.closeCart?.();
             this.showOrderConfirmation?.(order);
-
+            
         } catch (error) {
             console.error('❌ Error placing order:', error);
             alert('Failed to place order. Please try again.');
@@ -1135,36 +915,36 @@ shopping_cart_checkout
     }
 
     // Item Details Modal
-    // showItemDetails(itemId) {
-    //     const allItems = Object.values(this.menuItems).flat();
-    //     const item = allItems.find(i => i.id === itemId);
+    showItemDetails(itemId) {
+        const allItems = Object.values(this.menuItems).flat();
+        const item = allItems.find(i => i.id === itemId);
         
-    //     if (!item) return;
+        if (!item) return;
         
-    //     const modal = document.getElementById('item-modal');
-    //     const modalBody = document.getElementById('item-modal-body');
+        const modal = document.getElementById('item-modal');
+        const modalBody = document.getElementById('item-modal-body');
         
-    //     if (!modalBody) return;
+        if (!modalBody) return;
         
-    //     const badges = this.getItemBadges(item);
-    //     const cartItem = this.cart.find(cartItem => cartItem.id === item.id);
-    //     const quantity = cartItem ? cartItem.quantity : 0;
+        const badges = this.getItemBadges(item);
+        const cartItem = this.cart.find(cartItem => cartItem.id === item.id);
+        const quantity = cartItem ? cartItem.quantity : 0;
         
-    //     modalBody.innerHTML = `
-    //         <div class="item-modal-image-container">
-    //             <img src="${item.imageUrl}" alt="${item.name}">
-    //         </div>
-    //         <div class="item-modal-details">
-    //             <h2>${item.name}</h2>
-    //             <p>${item.description}</p>
-    //             <div class="item-modal-price">₹${item.price}</div>
-    //             <!-- Add more details as needed -->
-    //         </div>
-    //     `;
+        modalBody.innerHTML = `
+            <div class="item-modal-image-container">
+                <img src="${item.imageUrl}" alt="${item.name}">
+            </div>
+            <div class="item-modal-details">
+                <h2>${item.name}</h2>
+                <p>${item.description}</p>
+                <div class="item-modal-price">₹${item.price}</div>
+                <!-- Add more details as needed -->
+            </div>
+        `;
         
-    //     modal.classList.add('active');
-    //     document.body.style.overflow = 'hidden';
-    // }
+        modal.classList.add('active');
+        document.body.style.overflow = 'hidden';
+    }
 
     updateItemModal(itemId) {
         const cartItem = this.cart.find(item => item.id === itemId);
@@ -1180,13 +960,13 @@ shopping_cart_checkout
         }
     }
 
-    // closeItemModal() {
-    //     const modal = document.getElementById('item-modal');
-    //     if (modal) {
-    //         modal.classList.remove('active');
-    //         document.body.style.overflow = '';
-    //     }
-    // }
+    closeItemModal() {
+        const modal = document.getElementById('item-modal');
+        if (modal) {
+            modal.classList.remove('active');
+            document.body.style.overflow = '';
+        }
+    }
 
     // Service Requests
     async requestService(type) {
@@ -1249,14 +1029,7 @@ shopping_cart_checkout
 
     async endSession() {
         this.sessionActive = false;
-        
-        // Clear all session data from localStorage
-        localStorage.removeItem('customer_session_id');
-        localStorage.removeItem('session_start_time');
-        localStorage.removeItem('session_cart');
-        localStorage.removeItem('session_orders');
-        
-        this.generateBill?.();
+        this.generateBill();
     }
 
     generateBill() {
@@ -1463,53 +1236,9 @@ Thank you for dining with us! 🙏
     }
 
     startNewSession() {
-        // Clear localStorage before reload
-        localStorage.removeItem('customer_session_id');
-        localStorage.removeItem('session_start_time');
-        localStorage.removeItem('session_cart');
-        localStorage.removeItem('session_orders');
-        
         // Simple page reload for fresh session
         window.location.reload();
     }
-
-    // Session orders persistence
-loadSessionOrders() {
-    const savedOrders = localStorage.getItem('session_orders');
-    return savedOrders ? JSON.parse(savedOrders) : [];
-}
-
-saveSessionOrders() {
-    localStorage.setItem('session_orders', JSON.stringify(this.sessionOrders));
-}
-
-// Cart persistence
-loadCart() {
-    const savedCart = localStorage.getItem('session_cart');
-    return savedCart ? JSON.parse(savedCart) : [];
-}
-
-saveCart() {
-    localStorage.setItem('session_cart', JSON.stringify(this.cart));
-}
-
-// Add these new methods to your CustomerMenu class
-
-increaseCartItem(itemId) {
-    const cartItem = this.cart.find(item => item.id === itemId);
-    if (cartItem) {
-        const newQuantity = cartItem.quantity + 1;
-        this.updateCartItem(itemId, newQuantity);
-    }
-}
-
-decreaseCartItem(itemId) {
-    const cartItem = this.cart.find(item => item.id === itemId);
-    if (cartItem) {
-        const newQuantity = cartItem.quantity - 1;
-        this.updateCartItem(itemId, newQuantity);
-    }
-}
 
     // Event Listeners
     setupEventListeners() {
@@ -1542,14 +1271,6 @@ decreaseCartItem(itemId) {
                 this.hideSearchSuggestions();
             }
         });
-
-        // Add View Cart button listener
-        const viewCartBtn = document.getElementById('view-cart-btn');
-        if (viewCartBtn) {
-            viewCartBtn.addEventListener('click', () => {
-                this.viewCart(); // This should open your cart modal
-            });
-        }
     }
 }
 
