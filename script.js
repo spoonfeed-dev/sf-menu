@@ -1471,8 +1471,8 @@ shopping_cart_checkout
                     <div class="bill-restaurant-name">Kaveri Restaurant</div>
                     <div class="bill-details">
                         Excellence in Every Bite<br>
-                        Subhash Nagar, Korba, Chhattisgarh 495677<br>
-                        Phone: +91 7089999180<br>
+                        Tulsi Nagar, Korba, Chhattisgarh 495677<br>
+                        Phone: +91 9691465515<br>
                         GSTIN: 22XXXXX1234X1ZX
                     </div>
                 </div>
