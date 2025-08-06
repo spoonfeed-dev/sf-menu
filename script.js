@@ -1468,7 +1468,7 @@ shopping_cart_checkout
         const billHTML = `
             <div class="bill-container premium-fade-in">
                 <div class="bill-header">
-                    <div class="bill-restaurant-name">SahuJi's - Dosa Cafe</div>
+                    <div class="bill-restaurant-name">Kaveri Restaurant</div>
                     <div class="bill-details">
                         Excellence in Every Bite<br>
                         Subhash Nagar, Korba, Chhattisgarh 495677<br>
