@@ -1468,10 +1468,10 @@ shopping_cart_checkout
         const billHTML = `
             <div class="bill-container premium-fade-in">
                 <div class="bill-header">
-                    <div class="bill-restaurant-name">Kaveri Restaurant</div>
+                    <div class="bill-restaurant-name">The Cloudy Chef</div>
                     <div class="bill-details">
                         Excellence in Every Bite<br>
-                        Tulsi Nagar, Korba, Chhattisgarh 495677<br>
+                        SECL, Korba, Chhattisgarh 495677<br>
                         Phone: +91 9691465515<br>
                         GSTIN: 22XXXXX1234X1ZX
                     </div>
