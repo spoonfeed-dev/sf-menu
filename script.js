@@ -1468,7 +1468,7 @@ shopping_cart_checkout
         const billHTML = `
             <div class="bill-container premium-fade-in">
                 <div class="bill-header">
-                    <div class="bill-restaurant-name">The Cloudy Chef</div>
+                    <div class="bill-restaurant-name">The Keralaa Cafe</div>
                     <div class="bill-details">
                         Excellence in Every Bite<br>
                         SECL, Korba, Chhattisgarh 495677<br>
